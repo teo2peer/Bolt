@@ -46,7 +46,7 @@ class Movment(mp.Process):
         self.hpitch = self.pca.servo[10]
 
         # init position
-        self.initialize_position()
+        # self.initialize_position()
         
 
     def run(self):
@@ -60,8 +60,6 @@ class Movment(mp.Process):
             elif text == "yes" or text == "afirmative":
                 self.yes_head()
             
-            if text != "":
-                continue
             elif text == "exit":
                 break
             else:
