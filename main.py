@@ -71,6 +71,9 @@ class Robot():
             if text == "hi":
                 self.movment_pipe.send("greetings")
                 continue
+            elif text=="yes" or text=="afirmative":
+                self.movment_pipe.send("yes")
+            
 
 
             # elif text in self.camera_commands:

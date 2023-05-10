@@ -3,7 +3,7 @@ import time
 from adafruit_servokit import ServoKit
 import multiprocessing as mp
 import numpy as np
-
+import asyncio 
 
 
 class Movment(mp.Process):
@@ -42,8 +42,12 @@ class Movment(mp.Process):
 
         # head
         self.hyaw = self.pca.servo[8]
-        self.hpitch = self.pca.servo[9]
-        self.hroll = self.pca.servo[10]
+        self.hroll = self.pca.servo[9]
+        self.hpitch = self.pca.servo[10]
+
+        # init position
+        self.initialize_position()
+        
 
     def run(self):
         text = "";
@@ -51,7 +55,10 @@ class Movment(mp.Process):
             text = self.movment_pipe.recv()
             
             if text == "greetings":
-                self.greetingsMovment()
+                self.greetings_movment()
+
+            elif text == "yes" or text == "afirmative":
+                self.yes_head()
             
             if text != "":
                 continue
@@ -60,81 +67,127 @@ class Movment(mp.Process):
             else:
                 continue
 
-    def greetingsMovment(self):
-        # greetings with the right arm
-        self.rshoulder.angle = 180
-        self.relbow.angle = 90
-        self.rarm.angle = 90
 
-        self.move_arm(0, 90, 1)
+    def initialize_position(self):
+            
+            self.rshoulder.angle = 180
+            self.relbow.angle = 90
+            self.rarm.angle = 1
+
+            self.lshoulder.angle = 0
+            self.lelbow.angle = 90
+            self.larm.angle = 180
+
+            self.hyaw.angle = 90
+            self.hroll.angle = 92
+            self.hpitch.angle = 90
+
+            asyncio.run(self.move_servo(self.rshoulder, 0, 0.4))
+            asyncio.run(self.move_servo(self.relbow, 180, 0.4))
+            asyncio.run(self.move_servo(self.rarm, 1, 0.2))
+
+            asyncio.run(self.move_servo(self.lshoulder, 180, 0.4))
+            asyncio.run(self.move_servo(self.lelbow, 0, 0.4))
+            asyncio.run(self.move_servo(self.larm, 180, 0.2))
+
+            asyncio.run(self.move_servo(self.hyaw, 90, 0.4))
+            asyncio.run(self.move_servo(self.hroll, 92, 0.4))
+            asyncio.run(self.move_servo(self.hpitch, 90, 0.4))
+
+            
+            time.sleep(1)
+            asyncio.run(self.swing_servo(self.relbow, 65, 105, 2,0.1))
+            asyncio.run(self.swing_servo(self.lelbow, 65, 105, 2,0.1))
+
+            # swing the head
+            asyncio.run(self.swing_servo(self.hpitch, 65, 105, 2,0.1))
+            asyncio.run(self.swing_servo(self.hroll, 65, 105, 2,0.1))
+            asyncio.run(self.swing_servo(self.hyaw, 65, 105, 2,0.1))
+
+            time.sleep(1)
+            # move the head
+            asyncio.run(self.move_servo(self.hroll, 92, 0.4))
+            # move the hands to the init position
+            # first elbow
+            asyncio.run(self.move_servo(self.relbow, 90, 0.4))
+            asyncio.run(self.move_servo(self.lelbow, 90, 0.4))
+            # then shoulder
+            asyncio.run(self.move_servo(self.rshoulder, 180, 0.4))
+            asyncio.run(self.move_servo(self.lshoulder, 0, 0.4))
+            # then arm
+            asyncio.run(self.move_servo(self.rarm, 1, 0.2))
+            asyncio.run(self.move_servo(self.larm, 180, 0.2))
+
+
+
+
+
+
+    # arm movments
+
+    def greetings_movment(self):
+
+            
+
+            asyncio.run(self.move_servo(self.rshoulder, 0, 0.5))
+            asyncio.run(self.move_servo(self.relbow, 90, 0.5))
+            asyncio.run(self.move_servo(self.rarm, 1, 0.3))
+
+            # move the elbow in swing)
+            asyncio.run(self.swing_servo(self.relbow, 65, 105, 5,0.2))
+
+            asyncio.run(self.move_servo(self.rshoulder, 180, 0.5))
+            asyncio.run(self.move_servo(self.relbow, 92, 0.5))
+            asyncio.run(self.move_servo(self.rarm, 1, 0.3))
+
+
+    
+
+    # head movments
+    def yes_head(self):
+            asyncio.run(self.swing_servo(self.hpitch, 65, 105, 5,0.2))
+
+
+
+
+
+    async def swing_servo(self, servo, angle_init, angle_end, times, speed=0.5):
+            for i in range(0,times):
+                await self.move_servo(servo, angle_init, 0.5)
+                await self.move_servo(servo, angle_end, 0.5)
+            await self.move_servo(servo, angle_init, 0.5)
+
+
+    async def move_servo(self, servo, target_angle, move_time):
+        # Get the current angle of the servo
+        current_angle = servo.angle
+
+        # Convert the current and target angles to pulses
+        current_pulse = int(np.interp(current_angle, [0, 180], [self.MIN_IMP[1], self.MAX_IMP[1]]))
+        target_pulse = int(np.interp(target_angle, [0, 180], [self.MIN_IMP[1], self.MAX_IMP[1]]))
+
+        # Calculate the number of steps and the wait time between each step
+        steps = 100
+        wait_time = move_time / steps
+
+        # Calculate the difference between the current and target pulses
+        pulse_diff = (target_pulse - current_pulse) / steps
+
+        # Move the servo to the target position
+        for i in range(steps):
+            # Calculate the new pulse width
+            new_pulse = int(current_pulse + pulse_diff * i)
+
+            # Move the servo to the new pulse width
+            servo.angle = np.interp(new_pulse, [self.MIN_IMP[1], self.MAX_IMP[1]], [0, 180])
+
+            # Wait for the specified time
+            await asyncio.sleep(wait_time)
+
+        # At the end of the movement, set the angle to the target angle
+        servo.angle = target_angle
 
     
 
 
 
-    def move_arm(self, theta1, theta2, theta3):
-        # Dimensiones de los eslabones del brazo
-        L1 = 5
-        L2 = 7
-        L3 = 3
-
-        # Matrices de transformación de Denavit-Hartenberg
-        T01 = np.array([[np.cos(theta1), -np.sin(theta1), 0, 0],
-                        [np.sin(theta1), np.cos(theta1), 0, 0],
-                        [0, 0, 1, L1],
-                        [0, 0, 0, 1]])
-
-        T12 = np.array([[np.cos(theta2), -np.sin(theta2), 0, L2],
-                        [0, 0, -1, 0],
-                        [np.sin(theta2), np.cos(theta2), 0, 0],
-                        [0, 0, 0, 1]])
-
-        T23 = np.array([[np.cos(theta3), -np.sin(theta3), 0, L3],
-                        [np.sin(theta3), np.cos(theta3), 0, 0],
-                        [0, 0, 1, 0],
-                        [0, 0, 0, 1]])
-
-        # Matriz de transformación total
-        T03 = T01 @ T12 @ T23
-
-        # Coordenadas del efector final
-        x = T03[0, 3]
-        y = T03[1, 3]
-        z = T03[2, 3]
-
-        # Cálculo de los ángulos de los servos
-        a1 = np.arctan2(y, x)
-        a2 = np.arctan2(z - L1, np.sqrt(x**2 + y**2))
-        a3 = np.arctan2(np.sin(theta3) * np.sqrt(x**2 + y**2), np.cos(theta3) * np.sqrt(x**2 + y**2) + L3)
-
-        # Conversión de ángulos a pulsos
-        pulse1 = int(self.MIN_IMP[0] + (self.MAX_IMP[0] - self.MIN_IMP[0]) * (a1 - self.MIN_ANG[0]) / (self.MAX_ANG[0] - self.MIN_ANG[0]))
-        pulse2 = int(self.MIN_IMP[1] + (self.MAX_IMP[1] - self.MIN_IMP[1]) * (a2 - self.MIN_ANG[1]) / (self.MAX_ANG[1] - self.MIN_ANG[1]))
-        pulse3 = int(self.MIN_IMP[2] + (self.MAX_IMP[2] - self.MIN_IMP[2]) * (a3 - self.MIN_ANG[2]) / (self.MAX_ANG[2] - self.MIN_ANG[2]))
-
-        # Movimiento suave de los servos a las posiciones deseadas
-        self.move_servo_smoothly(self.rshoulder, pulse1)
-        self.move_servo_smoothly(self.relbow, pulse2)
-        self.move_servo_smoothly(self.rarm, pulse3)
-
-    def move_servo_smoothly(self, servo, pulse):
-        # Obtiene el pulso actual del servo
-        current_pulse = servo.pulse_width
-
-        # Si el pulso actual es mayor al pulso deseado, se disminuye el pulso actual hasta llegar al pulso deseado
-        if current_pulse > pulse:
-            while current_pulse > pulse:
-                current_pulse -= 1
-                servo  = current_pulse
-                time.sleep(0.01)
-
-        # Si el pulso actual es menor al pulso deseado, se aumenta el pulso actual hasta llegar al pulso deseado
-        elif current_pulse < pulse:
-            while current_pulse < pulse:
-                current_pulse += 1
-                servo = current_pulse
-                time.sleep(0.01)
-
-        # Si el pulso actual es igual al pulso deseado, no se hace nada
-        else:
-            pass
