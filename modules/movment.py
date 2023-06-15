@@ -23,6 +23,9 @@ class Movment(mp.Process):
         self.MAX_ANG  =[180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 180]
 
 
+        self.move_list_words= ["greetings", "yes", "afirmative", "dance1", "dance2"]
+        self.move_list = [self.greetings_movment, self.yes_head, self.yes_head, self.dance_1, self.dance_2]
+
         #Objects
         self.pca = ServoKit(channels=16)
 
@@ -46,7 +49,7 @@ class Movment(mp.Process):
         self.hpitch = self.pca.servo[10]
 
         # init position
-        # self.initialize_position()
+        self.initialize_position(True)
         
 
     def run(self):
@@ -54,25 +57,25 @@ class Movment(mp.Process):
         while True:
             text = self.movment_pipe.recv()
             
-            if text == "greetings":
-                self.greetings_movment()
-
-            elif text == "yes" or text == "afirmative":
-                self.yes_head()
-            
+            if text in self.move_list_words:
+                try:
+                    self.move_list[self.move_list_words.index(text)]()
+                except Exception as e:
+                    print(e)
+                    self.reset_position()
             elif text == "exit":
                 break
             else:
                 continue
 
 
-    def initialize_position(self):
+    def initialize_position(self, initialPos=False):
             
-            self.rshoulder.angle = 180
+            self.rshoulder.angle = 176
             self.relbow.angle = 90
-            self.rarm.angle = 1
+            self.rarm.angle = 5
 
-            self.lshoulder.angle = 0
+            self.lshoulder.angle = 1
             self.lelbow.angle = 90
             self.larm.angle = 180
 
@@ -80,13 +83,16 @@ class Movment(mp.Process):
             self.hroll.angle = 92
             self.hpitch.angle = 90
 
-            asyncio.run(self.move_servo(self.rshoulder, 0, 0.4))
-            asyncio.run(self.move_servo(self.relbow, 180, 0.4))
+            if initialPos:
+                return
+
+            asyncio.run(self.move_servo(self.rshoulder, 5, 0.4))
+            asyncio.run(self.move_servo(self.relbow, 175, 0.4))
             asyncio.run(self.move_servo(self.rarm, 1, 0.2))
 
             asyncio.run(self.move_servo(self.lshoulder, 180, 0.4))
             asyncio.run(self.move_servo(self.lelbow, 0, 0.4))
-            asyncio.run(self.move_servo(self.larm, 180, 0.2))
+            asyncio.run(self.move_servo(self.larm, 177, 0.2))
 
             asyncio.run(self.move_servo(self.hyaw, 90, 0.4))
             asyncio.run(self.move_servo(self.hroll, 92, 0.4))
@@ -105,6 +111,8 @@ class Movment(mp.Process):
             time.sleep(1)
             # move the head
             asyncio.run(self.move_servo(self.hroll, 92, 0.4))
+            asyncio.run(self.move_servo(self.hpitch, 90, 0.2))
+            asyncio.run(self.move_servo(self.hyaw, 90, 0.2))
             # move the hands to the init position
             # first elbow
             asyncio.run(self.move_servo(self.relbow, 90, 0.4))
@@ -117,7 +125,21 @@ class Movment(mp.Process):
             asyncio.run(self.move_servo(self.larm, 180, 0.2))
 
 
-
+    def reset_position(self):
+        # move the head
+        asyncio.run(self.move_servo(self.hroll, 92, 0.4))
+        asyncio.run(self.move_servo(self.hpitch, 90, 0.2))
+        asyncio.run(self.move_servo(self.hyaw, 90, 0.2))
+        # move the hands to the init position
+        # first elbow
+        asyncio.run(self.move_servo(self.relbow, 90, 0.4))
+        asyncio.run(self.move_servo(self.lelbow, 90, 0.4))
+        # then shoulder
+        asyncio.run(self.move_servo(self.rshoulder, 180, 0.4))
+        asyncio.run(self.move_servo(self.lshoulder, 0, 0.4))
+        # then arm
+        asyncio.run(self.move_servo(self.rarm, 1, 0.2))
+        asyncio.run(self.move_servo(self.larm, 180, 0.2))
 
 
 
@@ -127,7 +149,7 @@ class Movment(mp.Process):
 
             
 
-            asyncio.run(self.move_servo(self.rshoulder, 0, 0.5))
+            asyncio.run(self.move_servo(self.rshoulder, 5, 0.5))
             asyncio.run(self.move_servo(self.relbow, 90, 0.5))
             asyncio.run(self.move_servo(self.rarm, 1, 0.3))
 
@@ -144,6 +166,70 @@ class Movment(mp.Process):
     # head movments
     def yes_head(self):
             asyncio.run(self.swing_servo(self.hpitch, 65, 105, 5,0.2))
+            asyncio.run(self.move_servo(self.hpitch, 90, 0.5))
+
+
+
+    # dance movments
+    def dance_1(self):
+        asyncio.run(self.move_servo(self.relbow, 95, 0.5))
+        asyncio.run(self.move_servo(self.lelbow, 85, 0.5))
+        asyncio.run(self.move_servo(self.rarm, 90, 0.5))
+        asyncio.run(self.move_servo(self.larm, 100, 0.5))
+
+        for i in range(0,4):
+            asyncio.run(self.move_servo(self.rshoulder, 90, 0.2))
+            asyncio.run(self.move_servo(self.lshoulder, 90, 0.2))
+            asyncio.run(self.move_servo(self.rshoulder, 175, 0.2))
+            asyncio.run(self.move_servo(self.lshoulder, 1, 0.2))
+
+        asyncio.run(self.move_servo(self.relbow, 90, 0.5))
+        asyncio.run(self.move_servo(self.lelbow, 90, 0.5))
+        asyncio.run(self.move_servo(self.rarm, 1, 0.5))
+        asyncio.run(self.move_servo(self.larm, 180, 0.5))
+    
+
+
+    def dance_2(self):
+        asyncio.run(self.move_servo(self.rshoulder, 90, 0.2))
+        asyncio.run(self.move_servo(self.lshoulder, 90, 0.2))
+
+        for i in range(0,2):
+            asyncio.run(self.move_servo(self.rarm, 90, 0.1))
+            asyncio.run(self.move_servo(self.larm, 100, 0.1))
+            asyncio.run(self.move_servo(self.rarm, 1, 0.1))
+            asyncio.run(self.move_servo(self.larm, 180, 0.1))
+        
+        asyncio.run(self.move_servo(self.rshoulder, 70, 0.2))
+        asyncio.run(self.move_servo(self.lshoulder, 177, 0.2))
+        
+        for i in range(0,3):
+            asyncio.run(self.move_servo(self.rshoulder, 60, 0.2))
+            asyncio.run(self.move_servo(self.relbow, 30, 0.2))
+
+            asyncio.run( self.concat_movments(self.move_servo(self.hyaw, 160, 2.5), self.move_servo(self.relbow, 150, 2.5)))
+            asyncio.run(self.move_servo(self.relbow, 90, 0.1))
+            asyncio.run(self.move_servo(self.rshoulder, 175, 0.2))
+
+            asyncio.run(self.move_servo(self.lshoulder, 120, 0.2))
+            asyncio.run(self.move_servo(self.lelbow, 150, 0.2))
+
+            asyncio.run(self.concat_movments(self.move_servo(self.hyaw, 10, 2.5), self.move_servo(self.lelbow, 30, 2.5)))
+            asyncio.run(self.move_servo(self.lelbow, 90, 0.1))
+            asyncio.run(self.move_servo(self.lshoulder, 5, 0.2))
+        
+        asyncio.run(self.move_servo(self.relbow, 90, 0.1))
+        asyncio.run(self.move_servo(self.lelbow, 90, 0.1))
+        asyncio.run(self.move_servo(self.rarm, 1, 0.1))
+        asyncio.run(self.move_servo(self.larm, 180, 0.1))
+
+
+
+
+            
+
+        
+        
 
 
 
@@ -185,7 +271,8 @@ class Movment(mp.Process):
         # At the end of the movement, set the angle to the target angle
         servo.angle = target_angle
 
-    
+    async def concat_movments(self, function1, function2):
+        await asyncio.gather(function1, function2)
 
 
 

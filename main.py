@@ -5,6 +5,7 @@ import multiprocessing as mp
 import time
 import os
 import signal
+import json
 
 
 # modules
@@ -19,6 +20,18 @@ import modules.screen as screen
 # the bot will be able to move its head and arms, speak and voice recognition
 
 class Robot():
+
+    class bcolors:
+        HEADER = '\033[95m'
+        OKBLUE = '\033[94m'
+        OKCYAN = '\033[96m'
+        OKGREEN = '\033[92m'
+        WARNING = '\033[93m'
+        FAIL = '\033[91m'
+        ENDC = '\033[0m'
+        BOLD = '\033[1m'
+        UDERLINE = '\033[4m'
+
     def __init__(self):
         # initialize pipes
         self.tts_pipe = mp.Pipe()
@@ -42,7 +55,7 @@ class Robot():
         self.chat = chat.Chat(self.chat_pipe[1])
         self.mv = mv.Movment(self.movment_pipe[1])
         print("Starting screen")
-        self.screen = screen.Screen(self.screen_pipe[1])
+        # self.screen = screen.Screen(self.screen_pipe[1])
         # self.camera = camera.Camera(self.camera_pipe[1])
         #self.vr = modules.vr.VoiceRecognition(self.vr_pipe)
         #self.servo = modules.servo.Servo(self.servo_pipe)
@@ -55,7 +68,7 @@ class Robot():
         self.tts.start()
         self.chat.start()
         self.mv.start()
-        self.screen.start()
+        # self.screen.start()
         # self.camera.start()
         #self.vr.start()
         #self.ring_led.start()
@@ -64,7 +77,7 @@ class Robot():
         self.tts_pipe = self.tts_pipe[0]
         self.chat_pipe = self.chat_pipe[0]
         self.movment_pipe = self.movment_pipe[0]
-        self.screen_pipe = self.screen_pipe[0]
+        # self.screen_pipe = self.screen_pipe[0]
         # self.camera_pipe = self.camera_pipe[0]
         #self.vr_pipe = self.vr_pipe[0]
         #self.ring_led_pipe = self.ring_led_pipe[0]
@@ -74,7 +87,7 @@ class Robot():
         self.tts_pipe.send("Hola soy un robot!")
         while True:
             # get input from keyboard
-            text = input("Que quieres que te ayude?: ")
+            text = input(self.bcolors.ENDC+"\nQue quieres que te ayude?: "+self.bcolors.OKCYAN)
             if text == "exit":
                 break
             if text == "hi":
@@ -82,16 +95,15 @@ class Robot():
                 continue
             elif text=="yes" or text=="afirmative":
                 self.movment_pipe.send("yes")
+                continue   
+            elif text=="dance1" or text=="dance2" or text=="dance3":
+                self.movment_pipe.send(text)
                 continue
-            elif text=="love":
-                self.screen_pipe.send("love")
-            elif text=="normal":
-                self.screen_pipe.send("normal")    
             else:
                 self.chat_pipe.send(text)
                 response = self.chat_pipe.recv()
-                print(response)
-                self.tts_pipe.send(response)
+                print(self.bcolors.OKGREEN + response["message"] + self.bcolors.ENDC)
+                self.tts_pipe.send(response["message"])
 
 
     
@@ -100,14 +112,14 @@ class Robot():
         self.tts_pipe.send("exit")
         self.chat_pipe.send("exit")
         self.movment_pipe.send("exit")
-        self.screen_pipe.send("exit")
+        # self.screen_pipe.send("exit")
 
 
         time.sleep(1)
         self.tts.terminate()
         self.chat.terminate()
         self.mv.terminate()
-        self.screen.terminate()
+        # self.screen.terminate()
 
 # main 
 if __name__ == '__main__':
