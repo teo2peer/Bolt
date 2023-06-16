@@ -5,18 +5,17 @@ import openai
 import json
 
 class Chat(mp.Process):
-    def __init__(self, chat_pipe, lang="es"):
+    def __init__(self, chat_pipe, openai_token, lang="es"):
         super().__init__()
         self.chat_pipe = chat_pipe
 
-        self.openaiToken = "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"
         self.messages = [
-           {"role": "system", "content": "Eres un asistente virtual con gracia y personalidad divertida y ironica a veces, que ayuda a las personas dandoles la informacion necesaria. "},
+            {"role": "system", "content": "Eres un asistente virtual con gracia y personalidad divertida y ironica a veces, que ayuda a las personas dandoles la informacion necesaria. "},
             {"role": "system", "content": "Tus respuestas deben ser graciosas pero dando la informacion necesaria y no deben ser respuestas de mas de 150 palabras. A veces puedes burlarte de los usuarios " },
             {"role": "system", "content": "Devolveras toda la respuesta en formato json donde contendra el estado de aninmo (feliz, triste, ironico, animado, enfadado...) que te ha producid, ejemplo de tu respuesta: {\"mood\":\"feliz\",\"message\":\"este es el mensaje\"} " },
             {"role": "assistant", "content":"{\"mood\":\"feliz\",\"message\":\"vale, de acuerdo, ya vere yo lo que haga, chaval\"}"},
         ]
-        openai.api_key = self.openaiToken
+        openai.api_key = openai_token
 
 
 

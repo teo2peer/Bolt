@@ -4,14 +4,19 @@ from adafruit_servokit import ServoKit
 import multiprocessing as mp
 import numpy as np
 import asyncio 
-
+import paho.mqtt.client as mqtt
+import json
 
 class Movment(mp.Process):
-    def __init__(self, movment_pipe):
+    def __init__(self, movment_pipe, env_vars):
         super().__init__()
 
         # Pipe
         self.movment_pipe = movment_pipe
+
+        # Environment variables
+        self.env_vars = env_vars
+        self.last_movment = time.time()
 
         #Constants
         self.nbPCAServo=16 
@@ -23,8 +28,8 @@ class Movment(mp.Process):
         self.MAX_ANG  =[180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 180, 180]
 
 
-        self.move_list_words= ["greetings", "yes", "afirmative", "dance1", "dance2"]
-        self.move_list = [self.greetings_movment, self.yes_head, self.yes_head, self.dance_1, self.dance_2]
+        self.move_list_words= ["greetings", "yes", "afirmative", "dance1", "dance2", "follow"]
+        self.move_list = [self.greetings_movment, self.yes_head, self.yes_head, self.dance_1, self.dance_2, self.folow_movment]
 
         #Objects
         self.pca = ServoKit(channels=16)
@@ -146,9 +151,6 @@ class Movment(mp.Process):
     # arm movments
 
     def greetings_movment(self):
-
-            
-
             asyncio.run(self.move_servo(self.rshoulder, 175, 0.5))
             asyncio.run(self.move_servo(self.relbow, 90, 0.5))
             asyncio.run(self.move_servo(self.rarm, 1, 0.3))
@@ -204,14 +206,14 @@ class Movment(mp.Process):
             asyncio.run(self.move_servo(self.rshoulder, 120, 0.2))
             asyncio.run(self.move_servo(self.relbow, 30, 0.2))
 
-            asyncio.run( self.concat_movments(self.move_servo(self.hyaw, 160, 2.5), self.move_servo(self.relbow, 150, 2.5)))
+            asyncio.run( self.concat_movments([self.move_servo(self.hyaw, 160, 2.5), self.move_servo(self.relbow, 150, 2.5)]))
             asyncio.run(self.move_servo(self.relbow, 90, 0.1))
             asyncio.run(self.move_servo(self.rshoulder, 177, 0.2))
 
             asyncio.run(self.move_servo(self.lshoulder, 120, 0.2))
             asyncio.run(self.move_servo(self.lelbow, 150, 0.2))
 
-            asyncio.run(self.concat_movments(self.move_servo(self.hyaw, 10, 2.5), self.move_servo(self.lelbow, 30, 2.5)))
+            asyncio.run(self.concat_movments([self.move_servo(self.hyaw, 10, 2.5), self.move_servo(self.lelbow, 30, 2.5)]))
             asyncio.run(self.move_servo(self.lelbow, 90, 0.1))
             asyncio.run(self.move_servo(self.lshoulder, 177, 0.2))
         
@@ -221,13 +223,112 @@ class Movment(mp.Process):
 
 
             
+    #---------------------------------------------------------------------------------------------------
+    # *                                      MQTT FUNCTIONS                                             *
+    # ?  Simulate movments sent by the app via mqtt
+    #---------------------------------------------------------------------------------------------------
+        
+    # folow movments
+    def folow_movment(self):
+
+        print('Connecting MQTT')
+        client = mqtt.Client()
+        client.on_connect = self.on_connect
+        client.on_message = self.on_message_movment
+        client.connect(self.env_vars['MQTT_HOST'], int(self.env_vars['MQTT_PORT']), 60)
+
+        print("Starting movment")
+        # start the loop
+        while True:
+            # check if text is aviable in pipe  
+
+            if self.movment_pipe.poll():
+                text = self.movment_pipe.recv()
+                if text == 'stop':
+                    break
+            else:
+                client.loop()
+
+        client.disconnect()
+        client.loop_stop()
+        self.reset_position()
+
+    #---------------------------
+    # *   Auxiliar functions mqtt 
+    #---------------------------
+
+    # on connect
+    def on_connect(self, client, userdata, flags, rc):
+        topic_suscribe = self.env_vars['MQTT_TOPIC_MOVMENT']
+        client.subscribe(topic_suscribe)
+        
+
+    # on message
+    def on_message_movment(self, client, userdata, msg):
+        movment = msg.payload.decode()
+
+        data = json.loads(movment)
+
+
+        if(time.time() - self.last_movment < 0.5):
+            return
+        
+        self.last_movment = time.time()
+
+        data['rshoulder'] = self.map_value(data['rshoulder'], self.env_vars['R_SHOULDER_MOVMENT_MIN'], self.env_vars['R_SHOULDER_MOVMENT_MAX'], 90, self.env_vars['R_ELBOW_MAX'])
+        data['relbow'] = self.map_value(data['relbow'], self.env_vars['R_ELBOW_MOVMENT_MIN'], self.env_vars['R_ELBOW_MOVMENT_MAX'], self.env_vars['R_ARM_MIN'], self.env_vars['R_ARM_MAX'])
+        data['lshoulder'] = self.map_value(data['lshoulder'], self.env_vars['L_SHOULDER_MOVMENT_MIN'], self.env_vars['L_SHOULDER_MOVMENT_MAX'], 100, self.env_vars['L_ELBOW_MAX'])
+        data['lrelbow'] = self.map_value(data['lrelbow'], self.env_vars['L_ELBOW_MOVMENT_MIN'], self.env_vars['L_ELBOW_MOVMENT_MAX'], self.env_vars['L_ARM_MIN'], self.env_vars['L_ARM_MAX'])
+
+        # preaty print
+        print('Movment: ', data)
+
+
+
+        # move the robot
+        function_list=[
+            self.move_servo(self.relbow, data['rshoulder'], 0.2),
+            self.move_servo(self.rarm, data['relbow'], 0.2),
+            self.move_servo(self.lelbow, data['lshoulder'], 0.2),
+            self.move_servo(self.larm, data['lrelbow'], 0.2)
+        ]
+        asyncio.run(self.concat_movments(function_list))
 
         
+
+
+
+
+    #---------------------------
+    # *   General propouse functions
+    #---------------------------
+    
+    # function to map a value from one range to another and if is out of range return the min or max value
+    def map_value(self, value, in_min, in_max, out_min, out_max, inverted=False):
+        # convet values to int
+        
+        value = int(value)
+        in_min = int(in_min)
+        in_max = int(in_max)
+        out_min = int(out_min)
+        out_max = int(out_max)
+        if inverted:
+            value = in_max - value
+
+        if value < in_min:
+            return out_min
+        elif value > in_max:
+            return out_max
+        else:
+            return int(np.interp(value, [in_min, in_max], [out_min, out_max]))
         
 
 
 
-
+    #---------------------------------------------------------------------------
+    # *                           Auxiliar functions async for movment         *
+    # ?  Moves the robot async
+    #---------------------------------------------------------------------------
 
     async def swing_servo(self, servo, angle_init, angle_end, times, speed=0.5):
             for i in range(0,times):
@@ -265,8 +366,8 @@ class Movment(mp.Process):
         # At the end of the movement, set the angle to the target angle
         servo.angle = target_angle
 
-    async def concat_movments(self, function1, function2):
-        await asyncio.gather(function1, function2)
+    async def concat_movments(self, function_list):
+        await asyncio.gather(*function_list)
 
 
 

@@ -6,6 +6,7 @@ import time
 import os
 import signal
 import json
+from dotenv import dotenv_values
 
 
 # modules
@@ -14,13 +15,11 @@ import modules.chat as chat
 import modules.camera as camera
 import modules.movment as mv
 import modules.screen as screen
+# import modules.mqtt as mqtt
 
-# this program is a bot with 9 servo motors; 3 on the head for turn left, right, and up/down 
-# and 6 on the arms: one from shoulder to elbow, one from elbow to wrist, and one from wrist to hand
-# the bot will be able to move its head and arms, speak and voice recognition
+
 
 class Robot():
-
     class bcolors:
         HEADER = '\033[95m'
         OKBLUE = '\033[94m'
@@ -32,7 +31,7 @@ class Robot():
         BOLD = '\033[1m'
         UDERLINE = '\033[4m'
 
-    def __init__(self):
+    def __init__(self, env_vars):
         # initialize pipes
         self.tts_pipe = mp.Pipe()
         self.chat_pipe = mp.Pipe()
@@ -41,8 +40,11 @@ class Robot():
         self.vr_pipe = mp.Pipe()
         self.ring_led_pipe = mp.Pipe()
         self.camera_pipe = mp.Pipe()
+        self.mqtt_pipe = mp.Pipe()
 
         self.camera_commands=["foto", "face", "video"]
+
+        self.env_vars = env_vars
 
         self.initialize()
 
@@ -52,14 +54,15 @@ class Robot():
     def initialize(self):
         # initialize modules
         self.tts = tts.TTS(self.tts_pipe[1])
-        self.chat = chat.Chat(self.chat_pipe[1])
-        self.mv = mv.Movment(self.movment_pipe[1])
+        self.chat = chat.Chat(self.chat_pipe[1], self.env_vars.get('OPENAI_TOKEN'))
+        self.mv = mv.Movment(self.movment_pipe[1], self.env_vars)
         print("Starting screen")
         # self.screen = screen.Screen(self.screen_pipe[1])
         # self.camera = camera.Camera(self.camera_pipe[1])
         #self.vr = modules.vr.VoiceRecognition(self.vr_pipe)
         #self.servo = modules.servo.Servo(self.servo_pipe)
         #self.ring_led = modules.ring_led.RingLed(self.ring_led_pipe)
+        #self.mqtt = modules.mqtt.Mqtt(self.mqtt_pipe, func)
 
 
         print("AAA")
@@ -72,6 +75,7 @@ class Robot():
         # self.camera.start()
         #self.vr.start()
         #self.ring_led.start()
+        #self.mqtt.start()
 
         # modify pipes to be senders
         self.tts_pipe = self.tts_pipe[0]
@@ -81,6 +85,7 @@ class Robot():
         # self.camera_pipe = self.camera_pipe[0]
         #self.vr_pipe = self.vr_pipe[0]
         #self.ring_led_pipe = self.ring_led_pipe[0]
+        #self.mqtt_pipe = self.mqtt_pipe[0]
 
 
     def run(self):
@@ -88,7 +93,7 @@ class Robot():
         while True:
             # get input from keyboard
             text = input(self.bcolors.ENDC+"\nQue quieres que te ayude?: "+self.bcolors.OKCYAN)
-            if text == "exit":
+            if text == "exit" or text=="q":
                 break
             if text == "hi":
                 self.movment_pipe.send("greetings")
@@ -98,6 +103,11 @@ class Robot():
                 continue   
             elif text=="dance1" or text=="dance2" or text=="dance3":
                 self.movment_pipe.send(text)
+                continue
+            elif text=="follow":
+                self.movment_pipe.send("follow")
+                input(self.bcolors.FAIL + " Pulsa enter para parar... " + self.bcolors.ENDC)
+                self.movment_pipe.send("stop")
                 continue
             else:
                 self.chat_pipe.send(text)
@@ -123,7 +133,7 @@ class Robot():
 
 # main 
 if __name__ == '__main__':
-    robot = Robot()
+    robot = Robot(dotenv_values('.env'))
     try:
         robot.run()
     except KeyboardInterrupt:
