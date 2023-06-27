@@ -8,8 +8,12 @@ import librosa
 import asyncio
 import wave
 from io import BytesIO
+import os
+from mpyg321.MPyg123Player import MPyg123Player # or MPyg321Player if you installed mpg321
 
 
+player = MPyg123Player()
+#player.pitch(0.35)
 
 class TTS(mp.Process):
     def __init__(self, tts_pipe, lang="es"):
@@ -68,6 +72,8 @@ class TTS(mp.Process):
         mp3_file = BytesIO()
         tts = gTTS(text=text, lang=self.lang, tld=self.lang);
         tts.save('tmp/tts.mp3')
-        self.modify_audio()
+        player.play_song("tmp/tts.mp3")
+
+        # self.modify_audio()
     
     

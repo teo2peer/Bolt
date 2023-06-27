@@ -14,7 +14,7 @@ import modules.tts as tts
 import modules.chat as chat
 import modules.camera as camera
 import modules.movment as mv
-import modules.screen as screen
+# import modules.screen as screen
 # import modules.mqtt as mqtt
 
 
